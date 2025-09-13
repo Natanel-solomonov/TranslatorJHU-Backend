@@ -1,5 +1,5 @@
 // Simple transcription service that simulates real transcription based on audio characteristics
-class SimpleTranscriptionService {
+export class SimpleTranscriptionService {
   constructor() {
     this.audioPatterns = {
       // Common English words/phrases based on audio characteristics
@@ -32,24 +32,34 @@ class SimpleTranscriptionService {
     const size = audioBuffer.length;
     const chunks = Math.ceil(size / 100); // Approximate number of audio chunks
     
+    console.log(`🔍 Analyzing audio: ${size} bytes, ~${chunks} chunks`);
+    
     // Find the best matching pattern based on audio size and characteristics
     const matchingPatterns = this.audioPatterns.patterns.filter(pattern => 
       size >= pattern.minSize && size <= pattern.maxSize
     );
     
+    console.log(`🎯 Found ${matchingPatterns.length} matching patterns for size ${size}`);
+    
     if (matchingPatterns.length === 0) {
       // Default fallback based on size
-      if (size < 100) return "yes";
-      if (size < 200) return "hello";
-      if (size < 400) return "hi there";
-      if (size < 600) return "how are you";
-      if (size < 800) return "good morning";
-      return "this is a test";
+      let fallbackText;
+      if (size < 100) fallbackText = "yes";
+      else if (size < 200) fallbackText = "hello";
+      else if (size < 400) fallbackText = "hi there";
+      else if (size < 600) fallbackText = "how are you";
+      else if (size < 800) fallbackText = "good morning";
+      else fallbackText = "this is a test";
+      
+      console.log(`📝 Using fallback pattern: "${fallbackText}" for size ${size}`);
+      return fallbackText;
     }
     
     // Return a random matching pattern (in real implementation, this would be ML-based)
     const randomIndex = Math.floor(Math.random() * matchingPatterns.length);
-    return matchingPatterns[randomIndex].text;
+    const selectedPattern = matchingPatterns[randomIndex].text;
+    console.log(`📝 Selected pattern: "${selectedPattern}" from ${matchingPatterns.length} options`);
+    return selectedPattern;
   }
 
   async transcribeAudio(audioBuffer, sourceLanguage = 'en-US') {
