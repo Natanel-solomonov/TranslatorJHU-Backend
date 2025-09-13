@@ -9,7 +9,9 @@ let AppDataSource: DataSource;
 
 export const getDataSource = (): DataSource => {
   if (!AppDataSource) {
-    throw new Error("Database not initialized. Call initializeDatabase() first.");
+    throw new Error(
+      "Database not initialized. Call initializeDatabase() first."
+    );
   }
   return AppDataSource;
 };
@@ -20,7 +22,7 @@ export const initializeDatabase = async (): Promise<void> => {
       host: process.env.DB_HOST,
       port: process.env.DB_PORT,
       username: process.env.DB_USERNAME,
-      database: process.env.DB_NAME
+      database: process.env.DB_NAME,
     });
 
     AppDataSource = new DataSource({
@@ -46,9 +48,8 @@ export const initializeDatabase = async (): Promise<void> => {
       host: process.env.DB_HOST,
       port: process.env.DB_PORT,
       username: process.env.DB_USERNAME,
-      database: process.env.DB_NAME
+      database: process.env.DB_NAME,
     });
     process.exit(1);
   }
 };
-

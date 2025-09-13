@@ -15,6 +15,9 @@ interface SessionStream {
   sessionId: string;
   language: string;
   lastActivity: number;
+  onTranscription?: (result: TranscriptionResult) => void;
+  lastInterimResult?: TranscriptionResult;
+  finalizeTimer?: NodeJS.Timeout;
 }
 
 export class STTService {
@@ -30,17 +33,13 @@ export class STTService {
     try {
       // Initialize Google Cloud Speech client
       if (
-        process.env.GOOGLE_APPLICATION_CREDENTIALS ||
+        process.env.GOOGLE_APPLICATION_CREDENTIALS &&
         process.env.GOOGLE_CLOUD_PROJECT_ID
       ) {
-        const clientConfig: any = {};
-        if (process.env.GOOGLE_CLOUD_PROJECT_ID) {
-          clientConfig.projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-        }
-        if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-          clientConfig.keyFilename = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-        }
-        this.speechClient = new SpeechClient(clientConfig);
+        this.speechClient = new SpeechClient({
+          projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
+          keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+        });
 
         logger.info("Google Cloud Speech-to-Text initialized");
         this.isInitialized = true;
@@ -52,7 +51,11 @@ export class STTService {
     }
   }
 
-  async initializeSession(sessionId: string, language: string): Promise<void> {
+  async initializeSession(
+    sessionId: string,
+    language: string,
+    onTranscription?: (result: TranscriptionResult) => void
+  ): Promise<void> {
     if (!this.speechClient || !this.isInitialized) {
       throw new Error("STT service not initialized");
     }
@@ -62,7 +65,7 @@ export class STTService {
       const request = {
         config: {
           encoding: "WEBM_OPUS" as const,
-          sampleRateHertz: 16000,
+          sampleRateHertz: 48000, // Changed from 16000 to match typical browser audio
           languageCode: this.getLanguageCode(language),
           enableAutomaticPunctuation: true,
           enableWordTimeOffsets: false,
@@ -73,10 +76,21 @@ export class STTService {
         interimResults: true, // Enable interim results for real-time feedback
       };
 
+      logger.info(`Creating STT stream for session ${sessionId} with config:`, {
+        encoding: request.config.encoding,
+        sampleRateHertz: request.config.sampleRateHertz,
+        languageCode: request.config.languageCode,
+        model: request.config.model,
+      });
+
       const stream = this.speechClient.streamingRecognize(request);
 
       // Handle transcription results
       stream.on("data", (data) => {
+        logger.debug(
+          `STT stream data received for session ${sessionId}:`,
+          data
+        );
         if (data.results && data.results.length > 0) {
           const result = data.results[0];
           const transcript = result.alternatives?.[0];
@@ -90,8 +104,21 @@ export class STTService {
               timestamp: Date.now(),
             };
 
+            logger.info(
+              `STT transcription result for session ${sessionId}: "${transcriptionResult.text}" (isFinal: ${transcriptionResult.isFinal})`
+            );
+
+            // Store interim results and set up finalization timer
+            if (!transcriptionResult.isFinal) {
+              this.handleInterimResult(sessionId, transcriptionResult);
+            }
+
             this.handleTranscriptionResult(sessionId, transcriptionResult);
           }
+        } else {
+          logger.debug(
+            `STT stream data received but no results for session ${sessionId}`
+          );
         }
       });
 
@@ -111,6 +138,7 @@ export class STTService {
         sessionId,
         language,
         lastActivity: Date.now(),
+        onTranscription,
       });
 
       logger.info(`STT session initialized: ${sessionId} (${language})`);
@@ -136,8 +164,15 @@ export class STTService {
     try {
       // Send audio data to the stream
       if (session.stream && !session.stream.destroyed) {
+        logger.debug(
+          `Sending ${audioData.length} bytes of audio data to Google Cloud Speech for session ${sessionId}`
+        );
         session.stream.write(audioData);
         session.lastActivity = Date.now();
+      } else {
+        logger.warn(
+          `Cannot send audio data for session ${sessionId}: stream is destroyed or null`
+        );
       }
 
       // Note: Results are handled asynchronously via the stream events
@@ -191,6 +226,11 @@ export class STTService {
     }
 
     try {
+      // Clear any pending finalize timer
+      if (session.finalizeTimer) {
+        clearTimeout(session.finalizeTimer);
+      }
+
       if (session.stream && !session.stream.destroyed) {
         session.stream.destroy();
       }
@@ -206,12 +246,57 @@ export class STTService {
     return this.isInitialized && this.speechClient !== null;
   }
 
+  private handleInterimResult(
+    sessionId: string,
+    result: TranscriptionResult
+  ): void {
+    const session = this.sessions.get(sessionId);
+    if (!session) return;
+
+    // Clear any existing finalize timer
+    if (session.finalizeTimer) {
+      clearTimeout(session.finalizeTimer);
+    }
+
+    // Store the latest interim result
+    session.lastInterimResult = result;
+
+    // Set a timer to auto-finalize after 2 seconds of silence
+    session.finalizeTimer = setTimeout(() => {
+      if (session.lastInterimResult && session.lastInterimResult.text.trim()) {
+        logger.info(
+          `Auto-finalizing transcription for session ${sessionId}: "${session.lastInterimResult.text}"`
+        );
+
+        // Create a final version of the last interim result
+        const finalResult: TranscriptionResult = {
+          ...session.lastInterimResult,
+          isFinal: true,
+          timestamp: Date.now(),
+        };
+
+        this.handleTranscriptionResult(sessionId, finalResult);
+        session.lastInterimResult = undefined;
+      }
+    }, 2000); // 2 seconds delay
+  }
+
   private handleTranscriptionResult(
     sessionId: string,
     result: TranscriptionResult
   ): void {
-    // This would typically be handled by a callback or event system
-    // For now, we'll log the result
+    const session = this.sessions.get(sessionId);
+    if (session && session.onTranscription) {
+      logger.info(
+        `Calling onTranscription callback for session ${sessionId} with text: "${result.text}"`
+      );
+      session.onTranscription(result);
+    } else {
+      logger.warn(
+        `No onTranscription callback found for session ${sessionId}. Session exists: ${!!session}, callback exists: ${!!session?.onTranscription}`
+      );
+    }
+
     logger.debug(`Transcription for ${sessionId}:`, {
       text: result.text,
       confidence: result.confidence,

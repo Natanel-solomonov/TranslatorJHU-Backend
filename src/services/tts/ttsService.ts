@@ -83,8 +83,16 @@ export class TTSService {
       logger.info("Cartesia TTS provider initialized");
     }
 
-    if (this.providers.size === 0) {
-      logger.warn("No TTS providers configured");
+    // Always add mock provider as fallback
+    this.providers.set("mock", {
+      name: "Mock TTS",
+      synthesize: this.mockSynthesize.bind(this),
+      isAvailable: () => true,
+    });
+
+    if (this.providers.size === 1) {
+      this.defaultProvider = "mock";
+      logger.warn("No real TTS providers configured, using mock TTS");
     } else {
       logger.info(
         `TTS service initialized with ${this.providers.size} providers, default: ${this.defaultProvider}`
@@ -153,9 +161,14 @@ export class TTSService {
       if (fallbackProvider) {
         logger.info(`Trying fallback TTS provider: ${fallbackProvider}`);
         session.provider = fallbackProvider;
-        return this.synthesize(sessionId, text, language);
+        // Call the provider directly to avoid infinite recursion
+        const provider = this.providers.get(fallbackProvider);
+        if (provider && provider.isAvailable()) {
+          return provider.synthesize(text, language, session.voiceId);
+        }
       }
 
+      logger.error(`All TTS providers failed for session ${sessionId}`);
       return null;
     }
   }
@@ -409,6 +422,19 @@ export class TTSService {
       ko: "ko-KR",
     };
     return codes[language] || codes["en"] || "en-US";
+  }
+
+  // Mock TTS implementation for testing
+  private async mockSynthesize(
+    text: string,
+    language: string,
+    voiceId?: string
+  ): Promise<ArrayBuffer> {
+    logger.info(`Mock TTS synthesizing: "${text}" in ${language}`);
+
+    // Return a small mock audio buffer (silence)
+    const mockAudioData = new ArrayBuffer(1024); // 1KB of silence
+    return mockAudioData;
   }
 
   async cleanupSession(sessionId: string): Promise<void> {

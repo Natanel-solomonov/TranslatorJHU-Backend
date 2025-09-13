@@ -16,8 +16,12 @@ interface AuthenticatedRequest extends Request {
 }
 
 export class AuthController {
-  private get userRepository() { return getDataSource().getRepository(User); }
-  private get voiceProfileRepository() { return getDataSource().getRepository(VoiceProfile); }
+  private get userRepository() {
+    return getDataSource().getRepository(User);
+  }
+  private get voiceProfileRepository() {
+    return getDataSource().getRepository(VoiceProfile);
+  }
 
   async register(req: Request, res: Response): Promise<void> {
     try {

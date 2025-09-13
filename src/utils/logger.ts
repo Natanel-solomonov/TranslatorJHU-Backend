@@ -10,18 +10,8 @@ const loggerConfig = {
     },
   },
   timestamp: pino.stdTimeFunctions.isoTime,
-};
+} as any;
 
-// Add transport only in development
-if (isDevelopment) {
-  (loggerConfig as any).transport = {
-    target: "pino-pretty",
-    options: {
-      colorize: true,
-      translateTime: "HH:MM:ss Z",
-      ignore: "pid,hostname",
-    },
-  };
-}
+const logger = pino(loggerConfig);
 
-export const logger = pino(loggerConfig);
+export { logger };

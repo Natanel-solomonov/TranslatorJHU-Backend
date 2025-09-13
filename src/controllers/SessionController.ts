@@ -14,8 +14,12 @@ interface AuthenticatedRequest extends Request {
 }
 
 export class SessionController {
-  private get userRepository() { return getDataSource().getRepository(User); }
-  private get sessionRepository() { return getDataSource().getRepository(TranslationSession); }
+  private get userRepository() {
+    return getDataSource().getRepository(User);
+  }
+  private get sessionRepository() {
+    return getDataSource().getRepository(TranslationSession);
+  }
 
   async createSession(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {

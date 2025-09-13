@@ -64,6 +64,10 @@ export class TranslationService {
     sourceLanguage: string,
     targetLanguage: string
   ): Promise<string | null> {
+    logger.info(
+      `Translation requested for session ${sessionId}: "${text}" (${sourceLanguage} → ${targetLanguage})`
+    );
+
     if (!this.isInitialized || !this.genAI) {
       throw new Error("Translation service not initialized");
     }

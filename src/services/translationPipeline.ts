@@ -2,6 +2,9 @@ import { logger } from "../utils/logger";
 import { STTService } from "./stt/sttService";
 import { TranslationService } from "./translation/translationService";
 import { TTSService } from "./tts/ttsService";
+import { VoiceCloningService } from "./voiceCloning/voiceCloningService";
+import { AudioProcessingService } from "./audioProcessing/audioProcessingService";
+import { MLPipelineService } from "./mlPipeline/mlPipelineService";
 
 interface TranscriptionResult {
   id: string;
@@ -15,7 +18,7 @@ interface TranslationResult {
   captionId: string;
   translatedText: string;
   confidence: number;
-  audioData?: ArrayBuffer;
+  audioData?: ArrayBuffer | undefined;
 }
 
 interface SessionData {
@@ -30,18 +33,26 @@ export class TranslationPipeline {
   private sttService: STTService;
   private translationService: TranslationService;
   private ttsService: TTSService;
+  private voiceCloningService: VoiceCloningService;
+  private audioProcessingService: AudioProcessingService;
+  private mlPipelineService: MLPipelineService;
   private sessions = new Map<string, SessionData>();
 
   constructor() {
     this.sttService = new STTService();
     this.translationService = new TranslationService();
     this.ttsService = new TTSService();
+    this.voiceCloningService = new VoiceCloningService();
+    this.audioProcessingService = new AudioProcessingService();
+    this.mlPipelineService = new MLPipelineService();
   }
 
   async startSession(
     sessionId: string,
     sourceLanguage: string,
-    targetLanguage: string
+    targetLanguage: string,
+    onTranscription?: (result: TranscriptionResult) => void,
+    onTranslation?: (result: TranslationResult) => void
   ): Promise<void> {
     logger.info(`Starting translation session: ${sessionId}`);
 
@@ -56,7 +67,23 @@ export class TranslationPipeline {
     this.sessions.set(sessionId, sessionData);
 
     // Initialize services for the session
-    await this.sttService.initializeSession(sessionId, sourceLanguage);
+    // Create a callback that goes through the full translation pipeline
+    const transcriptionCallback = (result: TranscriptionResult) => {
+      this.handleTranscriptionResult(
+        sessionId,
+        result,
+        onTranscription,
+        onTranslation,
+        sourceLanguage,
+        targetLanguage
+      );
+    };
+
+    await this.sttService.initializeSession(
+      sessionId,
+      sourceLanguage,
+      transcriptionCallback
+    );
     await this.translationService.initializeSession(
       sessionId,
       sourceLanguage,
@@ -93,7 +120,13 @@ export class TranslationPipeline {
 
     // Ensure session exists
     if (!this.sessions.has(sessionId)) {
-      await this.startSession(sessionId, sourceLanguage, targetLanguage);
+      await this.startSession(
+        sessionId,
+        sourceLanguage,
+        targetLanguage,
+        onTranscription,
+        onTranslation
+      );
     }
 
     const sessionData = this.sessions.get(sessionId)!;
@@ -107,11 +140,19 @@ export class TranslationPipeline {
       );
 
       if (transcriptionResult) {
+        logger.info(
+          `TranslationPipeline received transcription for session ${sessionId}: "${transcriptionResult.text}" (isFinal: ${transcriptionResult.isFinal})`
+        );
+
         // Send transcription to client
+        logger.info(`Sending transcription to client for session ${sessionId}`);
         onTranscription(transcriptionResult);
 
         // 2. Translation (only for final transcriptions)
         if (transcriptionResult.isFinal && transcriptionResult.text.trim()) {
+          logger.info(
+            `Processing final transcription for translation: "${transcriptionResult.text}"`
+          );
           const translatedText = await this.translationService.translate(
             sessionId,
             transcriptionResult.text,
@@ -206,5 +247,73 @@ export class TranslationPipeline {
 
   getSessionInfo(sessionId: string): SessionData | undefined {
     return this.sessions.get(sessionId);
+  }
+
+  private async handleTranscriptionResult(
+    sessionId: string,
+    transcriptionResult: TranscriptionResult,
+    onTranscription?: (result: TranscriptionResult) => void,
+    onTranslation?: (result: TranslationResult) => void,
+    sourceLanguage?: string,
+    targetLanguage?: string
+  ): Promise<void> {
+    logger.info(
+      `TranslationPipeline received transcription for session ${sessionId}: "${transcriptionResult.text}" (isFinal: ${transcriptionResult.isFinal})`
+    );
+
+    // Send transcription to client
+    if (onTranscription) {
+      logger.info(`Sending transcription to client for session ${sessionId}`);
+      onTranscription(transcriptionResult);
+    }
+
+    // 2. Translation (only for final transcriptions)
+    if (
+      transcriptionResult.isFinal &&
+      transcriptionResult.text.trim() &&
+      sourceLanguage &&
+      targetLanguage &&
+      onTranslation
+    ) {
+      logger.info(
+        `Processing final transcription for translation: "${transcriptionResult.text}"`
+      );
+
+      try {
+        const translatedText = await this.translationService.translate(
+          sessionId,
+          transcriptionResult.text,
+          sourceLanguage,
+          targetLanguage
+        );
+
+        if (translatedText) {
+          // 3. Text-to-Speech
+          const audioData = await this.ttsService.synthesize(
+            sessionId,
+            translatedText,
+            targetLanguage
+          );
+
+          // Send translation result to client
+          const translationResult: TranslationResult = {
+            captionId: transcriptionResult.id,
+            translatedText,
+            confidence: 0.9, // Translation confidence (could be improved)
+            ...(audioData && { audioData }),
+          };
+
+          logger.info(
+            `Translation completed for session ${sessionId}: "${translatedText}"`
+          );
+          onTranslation(translationResult);
+        }
+      } catch (error) {
+        logger.error(
+          `Error in translation pipeline for session ${sessionId}:`,
+          error
+        );
+      }
+    }
   }
 }

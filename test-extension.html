@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Test Extension Translation</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        background: #f0f0f0;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      button {
+        background: #4285f4;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        margin: 5px;
+      }
+      button:hover {
+        background: #3367d6;
+      }
+      .status {
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 5px;
+      }
+      .success {
+        background: #d4edda;
+        color: #155724;
+      }
+      .error {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .info {
+        background: #d1ecf1;
+        color: #0c5460;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>TranslatorJHU Extension Test</h1>
+      <p>
+        This page simulates a video meeting to test the translation extension.
+      </p>
+
+      <div id="status" class="status info">
+        Ready to test. Load the extension and try the translation features.
+      </div>
+
+      <div>
+        <button onclick="simulateTranslation()">Simulate Translation</button>
+        <button onclick="testCaptions()">Test Captions</button>
+        <button onclick="clearMessages()">Clear</button>
+      </div>
+
+      <div id="messages" style="margin-top: 20px"></div>
+    </div>
+
+    <script>
+      function log(message, type = "info") {
+        const status = document.getElementById("status");
+        status.className = `status ${type}`;
+        status.textContent = message;
+
+        const messages = document.getElementById("messages");
+        const div = document.createElement("div");
+        div.className = `status ${type}`;
+        div.textContent = `${new Date().toLocaleTimeString()}: ${message}`;
+        messages.appendChild(div);
+        console.log(message);
+      }
+
+      function simulateTranslation() {
+        log("Simulating translation...", "info");
+
+        // Send mock transcription to captions overlay
+        const mockTranscriptions = [
+          {
+            id: "1",
+            text: "Hello everyone, welcome to our meeting",
+            confidence: 0.95,
+            isFinal: true,
+          },
+          {
+            id: "2",
+            text: "Today we will discuss the project progress",
+            confidence: 0.88,
+            isFinal: true,
+          },
+          {
+            id: "3",
+            text: "Does anyone have questions?",
+            confidence: 0.92,
+            isFinal: true,
+          },
+        ];
+
+        const mockTranslations = [
+          {
+            captionId: "1",
+            translatedText: "Hola a todos, bienvenidos a nuestra reunión",
+            confidence: 0.93,
+          },
+          {
+            captionId: "2",
+            translatedText: "Hoy discutiremos el progreso del proyecto",
+            confidence: 0.89,
+          },
+          {
+            captionId: "3",
+            translatedText: "¿Alguien tiene preguntas?",
+            confidence: 0.94,
+          },
+        ];
+
+        mockTranscriptions.forEach((transcription, index) => {
+          setTimeout(() => {
+            window.postMessage(
+              {
+                type: "transcription",
+                data: transcription,
+              },
+              "*"
+            );
+
+            // Send translation a moment later
+            setTimeout(() => {
+              window.postMessage(
+                {
+                  type: "translation",
+                  data: mockTranslations[index],
+                },
+                "*"
+              );
+            }, 500);
+          }, index * 2000);
+        });
+      }
+
+      function testCaptions() {
+        log("Testing captions overlay...", "info");
+
+        // Send show captions message
+        window.postMessage(
+          {
+            type: "showCaptions",
+            data: { sourceLanguage: "en", targetLanguage: "es" },
+          },
+          "*"
+        );
+
+        setTimeout(() => {
+          simulateTranslation();
+        }, 1000);
+      }
+
+      function clearMessages() {
+        document.getElementById("messages").innerHTML = "";
+        log("Messages cleared", "success");
+      }
+
+      // Listen for messages from extension
+      window.addEventListener("message", (event) => {
+        if (event.source !== window) return;
+
+        log(`Received message: ${event.data.type}`, "success");
+      });
+
+      log("Page loaded. Extension ready for testing.", "success");
+    </script>
+  </body>
+</html>
+
+
+
+
+

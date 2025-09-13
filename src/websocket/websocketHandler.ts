@@ -49,13 +49,25 @@ export class WebSocketHandler {
 
       ws.on("message", async (data) => {
         try {
-          if (data instanceof Buffer) {
-            // Binary audio data
-            await this.handleAudioData(clientId, data);
-          } else {
-            // JSON message
-            const message: WebSocketMessage = JSON.parse(data.toString());
+          logger.info(
+            `WebSocket received message from ${clientId}, data:`,
+            typeof data
+          );
+          // Check if data is a Buffer (which it always is in Node.js WebSocket)
+          const dataString = data.toString();
+
+          // Try to parse as JSON first
+          try {
+            const message: WebSocketMessage = JSON.parse(dataString);
+            logger.info(
+              `Processing JSON message from ${clientId}: ${message.type}`
+            );
+            logger.info(`Message data:`, JSON.stringify(message, null, 2));
             await this.handleMessage(clientId, message);
+          } catch (jsonError) {
+            // If JSON parsing fails, treat as binary audio data
+            logger.info(`Processing binary audio data from ${clientId}`);
+            await this.handleAudioData(clientId, data as Buffer);
           }
 
           // Update last activity
@@ -89,9 +101,13 @@ export class WebSocketHandler {
 
   private async handleMessage(clientId: string, message: WebSocketMessage) {
     const client = this.clients.get(clientId);
-    if (!client) return;
+    if (!client) {
+      logger.error(`❌ No client found in handleMessage for ${clientId}`);
+      return;
+    }
 
-    logger.debug(`Received message from ${clientId}:`, message.type);
+    logger.info(`📨 Received message from ${clientId}:`, message.type);
+    logger.info(`📨 Message data:`, JSON.stringify(message, null, 2));
 
     switch (message.type) {
       case "session:start":
@@ -138,6 +154,9 @@ export class WebSocketHandler {
         client.sourceLanguage,
         client.targetLanguage,
         (transcription) => {
+          logger.info(
+            `WebSocket sending transcription to client ${clientId}: "${transcription.text}" (isFinal: ${transcription.isFinal})`
+          );
           this.sendMessage(clientId, "transcription", transcription);
         },
         (translation) => {
@@ -151,30 +170,64 @@ export class WebSocketHandler {
   }
 
   private async handleSessionStart(clientId: string, data: any) {
+    logger.info(
+      `🔵 handleSessionStart called for ${clientId} with data:`,
+      data
+    );
     const client = this.clients.get(clientId);
-    if (!client) return;
+    if (!client) {
+      logger.error(`❌ No client found for ${clientId}`);
+      return;
+    }
+    logger.info(`✅ Client found for ${clientId}`);
 
     try {
       client.sessionId = data.sessionId || uuidv4();
       client.sourceLanguage = data.sourceLanguage || "en";
       client.targetLanguage = data.targetLanguage || "es";
 
-      await this.translationPipeline.startSession(
-        client.sessionId!,
-        client.sourceLanguage,
-        client.targetLanguage
+      logger.info(
+        `Starting translation pipeline for session ${client.sessionId}`
       );
 
+      // Try to start the translation pipeline
+      try {
+        await this.translationPipeline.startSession(
+          client.sessionId!,
+          client.sourceLanguage,
+          client.targetLanguage,
+          (transcription) => {
+            this.sendMessage(clientId, "transcription", transcription);
+          },
+          (translation) => {
+            this.sendMessage(clientId, "translation", translation);
+          }
+        );
+        logger.info(
+          `Translation pipeline started successfully for ${client.sessionId}`
+        );
+      } catch (pipelineError) {
+        logger.error(`Translation pipeline failed to start:`, pipelineError);
+        // Continue anyway - some services might work even if others fail
+        logger.info(`Continuing with session start despite pipeline errors`);
+      }
+
+      logger.info(`🟢 About to send session:started response to ${clientId}`);
       this.sendMessage(clientId, "session:started", {
         sessionId: client.sessionId,
         sourceLanguage: client.sourceLanguage,
         targetLanguage: client.targetLanguage,
       });
+      logger.info(
+        `✅ session:started message sent successfully to ${clientId}`
+      );
 
-      logger.info(`Session started for ${clientId}: ${client.sessionId}`);
+      logger.info(`🎉 Session started for ${clientId}: ${client.sessionId}`);
     } catch (error) {
       logger.error(`Failed to start session for ${clientId}:`, error);
-      this.sendError(clientId, "Failed to start session");
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      this.sendError(clientId, `Failed to start session: ${errorMessage}`);
     }
   }
 

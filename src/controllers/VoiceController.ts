@@ -19,9 +19,15 @@ interface AuthenticatedRequest extends Request {
 }
 
 export class VoiceController {
-  private get userRepository() { return getDataSource().getRepository(User); }
-  private get voiceProfileRepository() { return getDataSource().getRepository(VoiceProfile); }
-  private get voiceSampleRepository() { return getDataSource().getRepository(VoiceSample); }
+  private get userRepository() {
+    return getDataSource().getRepository(User);
+  }
+  private get voiceProfileRepository() {
+    return getDataSource().getRepository(VoiceProfile);
+  }
+  private get voiceSampleRepository() {
+    return getDataSource().getRepository(VoiceSample);
+  }
 
   async uploadVoiceSamples(
     req: AuthenticatedRequest,
