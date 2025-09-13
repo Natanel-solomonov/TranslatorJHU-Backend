@@ -2,6 +2,9 @@ import { logger } from "../utils/logger";
 import { STTService } from "./stt/sttService";
 import { TranslationService } from "./translation/translationService";
 import { TTSService } from "./tts/ttsService";
+import { VoiceCloningService } from "./voiceCloning/voiceCloningService";
+import { AudioProcessingService } from "./audioProcessing/audioProcessingService";
+import { MLPipelineService } from "./mlPipeline/mlPipelineService";
 
 interface TranscriptionResult {
   id: string;
@@ -15,7 +18,7 @@ interface TranslationResult {
   captionId: string;
   translatedText: string;
   confidence: number;
-  audioData?: ArrayBuffer;
+  audioData?: ArrayBuffer | undefined;
 }
 
 interface SessionData {
@@ -30,12 +33,18 @@ export class TranslationPipeline {
   private sttService: STTService;
   private translationService: TranslationService;
   private ttsService: TTSService;
+  private voiceCloningService: VoiceCloningService;
+  private audioProcessingService: AudioProcessingService;
+  private mlPipelineService: MLPipelineService;
   private sessions = new Map<string, SessionData>();
 
   constructor() {
     this.sttService = new STTService();
     this.translationService = new TranslationService();
     this.ttsService = new TTSService();
+    this.voiceCloningService = new VoiceCloningService();
+    this.audioProcessingService = new AudioProcessingService();
+    this.mlPipelineService = new MLPipelineService();
   }
 
   async startSession(
@@ -99,10 +108,21 @@ export class TranslationPipeline {
     const sessionData = this.sessions.get(sessionId)!;
 
     try {
+      // 0. Advanced audio processing
+      const processedAudioData = await this.audioProcessingService.processAudio(audioData);
+      
+      // Voice activity detection
+      const vadResult = await this.audioProcessingService.detectVoiceActivity(processedAudioData);
+      
+      if (!vadResult.isSpeech) {
+        // Skip processing if no speech detected
+        return;
+      }
+
       // 1. Speech-to-Text
       const transcriptionResult = await this.sttService.processAudio(
         sessionId,
-        audioData,
+        processedAudioData,
         sourceLanguage
       );
 
@@ -120,19 +140,36 @@ export class TranslationPipeline {
           );
 
           if (translatedText) {
-            // 3. Text-to-Speech
-            const audioData = await this.ttsService.synthesize(
-              sessionId,
-              translatedText,
-              targetLanguage
-            );
+            // 3. Text-to-Speech with voice cloning (if available)
+            let audioData: ArrayBuffer | null = null;
+            
+            // Try voice cloning first, fallback to regular TTS
+            const clonedVoices = this.voiceCloningService.getClonedVoices();
+            if (clonedVoices.length > 0) {
+              const voice = clonedVoices[0]; // Use first available cloned voice
+              if (voice) {
+                audioData = await this.voiceCloningService.synthesizeWithClone(
+                  translatedText,
+                  voice.voiceId
+                );
+              }
+            }
+            
+            // Fallback to regular TTS if voice cloning fails
+            if (!audioData) {
+              audioData = await this.ttsService.synthesize(
+                sessionId,
+                translatedText,
+                targetLanguage
+              );
+            }
 
             // Send translation result to client
             const translationResult: TranslationResult = {
               captionId: transcriptionResult.id,
               translatedText,
               confidence: 0.9, // Translation confidence (could be improved)
-              audioData,
+              audioData: audioData || undefined,
             };
 
             onTranslation(translationResult);

@@ -10,6 +10,7 @@ import { TranslationPipeline } from "./services/translationPipeline";
 import { errorHandler } from "./middleware/errorHandler";
 import { healthRoutes } from "./routes/health";
 import { configRoutes } from "./routes/config";
+import { voiceCloningRoutes } from "./routes/voiceCloning";
 
 // Load environment variables
 dotenv.config();
@@ -50,6 +51,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // Routes
 app.use("/api/health", healthRoutes);
 app.use("/api/config", configRoutes);
+app.use("/api/voice", voiceCloningRoutes);
 
 // Error handling
 app.use(errorHandler);

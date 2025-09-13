@@ -34,8 +34,8 @@ export class STTService {
         process.env.GOOGLE_CLOUD_PROJECT_ID
       ) {
         this.speechClient = new SpeechClient({
-          projectId: process.env.GOOGLE_CLOUD_PROJECT_ID,
-          keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+          projectId: process.env.GOOGLE_CLOUD_PROJECT_ID || "",
+          keyFilename: process.env.GOOGLE_APPLICATION_CREDENTIALS || "",
         });
 
         logger.info("Google Cloud Speech-to-Text initialized");
