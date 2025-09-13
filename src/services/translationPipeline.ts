@@ -132,7 +132,7 @@ export class TranslationPipeline {
               captionId: transcriptionResult.id,
               translatedText,
               confidence: 0.9, // Translation confidence (could be improved)
-              audioData,
+              ...(audioData && { audioData }),
             };
 
             onTranslation(translationResult);

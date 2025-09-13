@@ -10,6 +10,10 @@ import { TranslationPipeline } from "./services/translationPipeline";
 import { errorHandler } from "./middleware/errorHandler";
 import { healthRoutes } from "./routes/health";
 import { configRoutes } from "./routes/config";
+import { authRoutes } from "./routes/auth";
+import { voiceRoutes } from "./routes/voice";
+import { sessionRoutes } from "./routes/sessions";
+import { initializeDatabase } from "./config/database";
 
 // Load environment variables
 dotenv.config();
@@ -50,27 +54,44 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // Routes
 app.use("/api/health", healthRoutes);
 app.use("/api/config", configRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/voice", voiceRoutes);
+app.use("/api/sessions", sessionRoutes);
 
 // Error handling
 app.use(errorHandler);
 
-// Initialize translation pipeline
-const translationPipeline = new TranslationPipeline();
+// Initialize database and start server
+const startServer = async () => {
+  try {
+    // Initialize database connection
+    await initializeDatabase();
 
-// WebSocket server
-const wss = new WebSocketServer({
-  server,
-  path: "/ws",
-});
+    // Initialize translation pipeline
+    const translationPipeline = new TranslationPipeline();
 
-const wsHandler = new WebSocketHandler(wss, translationPipeline);
+    // WebSocket server
+    const wss = new WebSocketServer({
+      server,
+      path: "/ws",
+    });
 
-// Start server
-server.listen(port, () => {
-  logger.info(`🚀 TranslatorJHU Backend running on port ${port}`);
-  logger.info(`📡 WebSocket server running on ws://localhost:${port}/ws`);
-  logger.info(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
-});
+    const wsHandler = new WebSocketHandler(wss, translationPipeline);
+
+    // Start server
+    server.listen(port, () => {
+      logger.info(`🚀 TranslatorJHU Backend running on port ${port}`);
+      logger.info(`📡 WebSocket server running on ws://localhost:${port}/ws`);
+      logger.info(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
+      logger.info(`🗄️  Database connected successfully`);
+    });
+  } catch (error) {
+    logger.error("Failed to start server:", error);
+    process.exit(1);
+  }
+};
+
+startServer();
 
 // Graceful shutdown
 process.on("SIGTERM", () => {

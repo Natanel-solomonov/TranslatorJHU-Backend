@@ -338,7 +338,7 @@ export class TTSService {
       ja: "Sakura",
       ko: "Jiwoo",
     };
-    return voices[language] || voices["en"];
+    return voices[language] || voices["en"] || "en-US-JennyMultilingualNeural";
   }
 
   private getAzureVoiceId(language: string): string {
@@ -353,7 +353,7 @@ export class TTSService {
       ja: "ja-JP-NanamiNeural",
       ko: "ko-KR-SunHiNeural",
     };
-    return voices[language] || voices["en"];
+    return voices[language] || voices["en"] || "en-US-JennyMultilingualNeural";
   }
 
   private getGoogleVoiceId(language: string): string {
@@ -368,7 +368,7 @@ export class TTSService {
       ja: "ja-JP-Wavenet-B",
       ko: "ko-KR-Wavenet-A",
     };
-    return voices[language] || voices["en"];
+    return voices[language] || voices["en"] || "en-US-JennyMultilingualNeural";
   }
 
   private getCartesiaVoiceId(language: string): string {
@@ -378,7 +378,7 @@ export class TTSService {
       es: "sonic-spanish-1",
       fr: "sonic-french-1",
     };
-    return voices[language] || voices["en"];
+    return voices[language] || voices["en"] || "en-US-JennyMultilingualNeural";
   }
 
   private getAzureLanguageCode(language: string): string {
@@ -393,7 +393,7 @@ export class TTSService {
       ja: "ja-JP",
       ko: "ko-KR",
     };
-    return codes[language] || codes["en"];
+    return codes[language] || codes["en"] || "en-US";
   }
 
   private getGoogleLanguageCode(language: string): string {
@@ -408,7 +408,7 @@ export class TTSService {
       ja: "ja-JP",
       ko: "ko-KR",
     };
-    return codes[language] || codes["en"];
+    return codes[language] || codes["en"] || "en-US";
   }
 
   async cleanupSession(sessionId: string): Promise<void> {

@@ -160,7 +160,7 @@ export class WebSocketHandler {
       client.targetLanguage = data.targetLanguage || "es";
 
       await this.translationPipeline.startSession(
-        client.sessionId,
+        client.sessionId!,
         client.sourceLanguage,
         client.targetLanguage
       );
@@ -185,7 +185,7 @@ export class WebSocketHandler {
     try {
       await this.translationPipeline.stopSession(client.sessionId);
 
-      client.sessionId = undefined;
+      client.sessionId = undefined as any;
       client.isRecording = false;
 
       this.sendMessage(clientId, "session:stopped", {
