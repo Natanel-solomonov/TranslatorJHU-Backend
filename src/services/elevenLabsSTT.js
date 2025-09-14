@@ -196,7 +196,7 @@ export class ElevenLabsSTTService {
         if (this.hasApiKey) {
           try {
             console.log(`🎵 Generating audio with ElevenLabs TTS...`);
-            audioData = await this.generateAudio(translatedText);
+            audioData = await this.generateAudio(translatedText, options?.voiceId);
             console.log(`✅ Audio generated successfully`);
           } catch (audioError) {
             console.warn('⚠️ Audio generation failed:', audioError.message);
@@ -229,7 +229,7 @@ export class ElevenLabsSTTService {
       if (this.hasApiKey) {
         try {
           console.log(`🎵 Generating fallback audio with ElevenLabs TTS for: "${fallbackTranslation}"`);
-          audioData = await this.generateAudio(fallbackTranslation);
+          audioData = await this.generateAudio(fallbackTranslation, options?.voiceId);
           console.log(`✅ Fallback audio generated successfully`);
         } catch (audioError) {
           console.warn('⚠️ Fallback audio generation failed:', audioError.message);
@@ -244,7 +244,7 @@ export class ElevenLabsSTTService {
     }
   }
 
-  async generateAudio(text) {
+  async generateAudio(text, voiceId = null) {
     if (!this.hasApiKey) {
       console.log('⚠️ ElevenLabs TTS: API key not provided, skipping audio generation');
       return null;
@@ -254,6 +254,7 @@ export class ElevenLabsSTTService {
     return new Promise((resolve) => {
       this.requestQueue.push({
         text,
+        voiceId,
         resolve,
         timestamp: Date.now()
       });
@@ -284,7 +285,11 @@ export class ElevenLabsSTTService {
     try {
       console.log(`🎵 Processing TTS request: "${request.text.substring(0, 50)}..."`);
       
-      const response = await fetch(`${this.baseUrl}/text-to-speech/21m00Tcm4TlvDq8ikWAM`, {
+      // Use custom voice ID if provided, otherwise use default
+      const voiceId = request.voiceId || '21m00Tcm4TlvDq8ikWAM';
+      console.log(`🎤 Using voice ID: ${voiceId}`);
+      
+      const response = await fetch(`${this.baseUrl}/text-to-speech/${voiceId}`, {
         method: 'POST',
         headers: {
           'xi-api-key': this.apiKey,
@@ -292,7 +297,7 @@ export class ElevenLabsSTTService {
         },
         body: JSON.stringify({
           text: request.text,
-          model_id: 'eleven_monolingual_v1',
+          model_id: 'eleven_multilingual_v2',
           voice_settings: {
             stability: 0.5,
             similarity_boost: 0.5

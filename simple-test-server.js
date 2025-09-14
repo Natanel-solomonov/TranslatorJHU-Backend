@@ -8,13 +8,17 @@ import SimpleTranscriptionService from './src/services/simpleTranscription.js';
 import { elevenLabsService } from './src/services/elevenLabsService.js';
 import { elevenLabsSTTService } from './src/services/elevenLabsSTT.js';
 import { assemblyAIService } from './src/services/assemblyAIService.js';
+import authRoutes from './src/routes/auth.js';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increase limit for audio data
+
+// Routes
+app.use('/api/auth', authRoutes);
 
 // Mock API endpoints for testing
 app.get('/api/health', (req, res) => {
@@ -35,16 +39,19 @@ app.get('/api/health', (req, res) => {
 // Translation endpoint for text translation
 app.post('/api/translate', async (req, res) => {
   try {
-    const { text, sourceLanguage = 'en', targetLanguage = 'es' } = req.body;
+    const { text, sourceLanguage = 'en', targetLanguage = 'es', voiceId = null } = req.body;
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
 
     console.log(`🌐 Translation request: "${text}" (${sourceLanguage} → ${targetLanguage})`);
+    if (voiceId) {
+      console.log(`🎤 Using custom voice ID: ${voiceId}`);
+    }
     
-    // Use the transcription service for translation
-    const result = await transcriptionService.translateText(text, targetLanguage);
+    // Use the transcription service for translation with voice ID
+    const result = await transcriptionService.translateText(text, targetLanguage, { voiceId });
     
     console.log(`✅ Translation result: "${result.translatedText}"`);
     
@@ -52,7 +59,8 @@ app.post('/api/translate', async (req, res) => {
       translatedText: result.translatedText,
       confidence: result.confidence || 0.8,
       sourceLanguage,
-      targetLanguage
+      targetLanguage,
+      audioData: result.audioData
     });
   } catch (error) {
     console.error('❌ Translation endpoint error:', error);
@@ -486,12 +494,15 @@ wss.on('connection', (ws) => {
             }
             
             // Translate the caption text
-            const translationResult = await transcriptionService.translateText(text, targetLanguage);
+            const translationResult = await transcriptionService.translateText(text, targetLanguage, { voiceId: data.voiceId });
             
             console.log('✅ Caption translation completed:');
             console.log(`   - Original: "${text}"`);
             console.log(`   - Translated: "${translationResult.translatedText}"`);
             console.log(`   - Confidence: ${translationResult.confidence}`);
+            if (data.voiceId) {
+              console.log(`   - Using custom voice: ${data.voiceId}`);
+            }
             
             // Send translation back to client
             const translationMessage = {

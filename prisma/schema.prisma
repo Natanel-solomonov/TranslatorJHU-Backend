@@ -1,0 +1,43 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  email       String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  voiceEnrolled Boolean @default(false)
+  voiceId     String?  // ElevenLabs custom voice ID
+  voiceName   String?  // Custom voice name
+  
+  // Voice enrollment audio files
+  audioFiles  AudioFile[]
+  
+  @@map("users")
+}
+
+model AudioFile {
+  id          String   @id @default(cuid())
+  userId      String
+  phraseId    String   // "phrase_0", "phrase_1", "phrase_2"
+  phrase      String   // The actual phrase text
+  audioData   Bytes    // The recorded audio as binary data
+  mimeType    String   // "audio/webm", "audio/wav", etc.
+  fileSize    Int      // Size in bytes
+  createdAt   DateTime @default(now())
+  
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("audio_files")
+}
