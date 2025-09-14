@@ -1,4 +1,7 @@
 // Simple test server for TranslatorJHU extension testing
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import { WebSocketServer } from 'ws';
 import cors from 'cors';

@@ -4,7 +4,7 @@
 export const API_KEYS = {
   // ElevenLabs API (Free: 10,000 characters/month)
   // Get your key at: https://elevenlabs.io/app/settings/api-keys
-  ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY || '',
+  ELEVENLABS_API_KEY: process.env.ELEVENLABS_API_KEY || 'sk_8b6ee3c7e067ec3d692d6430dc99460a0fef95028548bee2',
   
   // Google Cloud (Optional - $300 free credit)
   GOOGLE_APPLICATION_CREDENTIALS: process.env.GOOGLE_APPLICATION_CREDENTIALS || '',

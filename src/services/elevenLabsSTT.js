@@ -7,6 +7,11 @@ export class ElevenLabsSTTService {
     this.baseUrl = 'https://api.elevenlabs.io/v1';
     this.hasApiKey = this.apiKey && this.apiKey !== 'your_elevenlabs_api_key_here';
     
+    console.log(`🔑 ElevenLabs API Key loaded: ${this.hasApiKey ? 'YES' : 'NO'}`);
+    if (this.hasApiKey) {
+      console.log(`🔑 API Key: ${this.apiKey.substring(0, 10)}...`);
+    }
+    
     // Rate limiting and queuing
     this.requestQueue = [];
     this.activeRequests = 0;
@@ -169,8 +174,11 @@ export class ElevenLabsSTTService {
 
 
 
-  async translateText(text, targetLanguage = 'es') {
+  async translateText(text, targetLanguage = 'es', voiceId = null) {
     try {
+      console.log(`\n🌐 ===== TRANSLATION REQUEST =====`);
+      console.log(`📝 BEFORE: "${text}"`);
+      console.log(`🌍 TARGET LANGUAGE: ${targetLanguage}`);
       console.log(`🌐 ElevenLabs STT: Translating "${text}" to ${targetLanguage}`);
       
       // Handle empty text
@@ -183,20 +191,44 @@ export class ElevenLabsSTTService {
         };
       }
       
-      // Use free translation API
-      const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${targetLanguage}`);
+      // Use Google Translate free endpoint with better parsing
+      const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLanguage}&dt=t&q=${encodeURIComponent(text)}`);
       const data = await response.json();
       
-      if (data.responseStatus === 200 && data.responseData) {
-        const translatedText = data.responseData.translatedText;
-        console.log(`🌐 Translation result: "${text}" → "${translatedText}"`);
+      if (data && data[0] && data[0].length > 0) {
+        // Get the best translation by combining all translation segments
+        let translatedText = '';
+        let confidence = 0.8;
+        
+        // Combine all translation segments for better quality
+        for (let i = 0; i < data[0].length; i++) {
+          if (data[0][i] && data[0][i][0]) {
+            translatedText += data[0][i][0];
+          }
+        }
+        
+        // Clean up the translation
+        translatedText = translatedText.trim();
+        
+        // If we got a good translation, use it
+        if (translatedText && translatedText.length > 0) {
+          console.log(`\n✅ ===== TRANSLATION RESULT =====`);
+          console.log(`📝 BEFORE: "${text}"`);
+          console.log(`📝 AFTER:  "${translatedText}"`);
+          console.log(`🌍 LANGUAGE: auto → ${targetLanguage}`);
+          console.log(`🎯 CONFIDENCE: ${confidence}`);
+          console.log(`================================\n`);
+        } else {
+          throw new Error('No translation received');
+        }
         
         // Generate audio using ElevenLabs TTS if API key is available
         let audioData = null;
         if (this.hasApiKey) {
           try {
-            console.log(`🎵 Generating audio with ElevenLabs TTS...`);
-            audioData = await this.generateAudio(translatedText, options?.voiceId);
+            console.log(`🎵 Generating audio with ElevenLabs TTS for: "${translatedText}"`);
+            const defaultVoiceId = voiceId || 'pNInz6obpgDQGcFmaJgB'; // Default ElevenLabs voice
+            audioData = await this.generateAudio(translatedText, defaultVoiceId);
             console.log(`✅ Audio generated successfully`);
           } catch (audioError) {
             console.warn('⚠️ Audio generation failed:', audioError.message);
@@ -212,6 +244,11 @@ export class ElevenLabsSTTService {
         throw new Error('Translation API failed');
       }
     } catch (error) {
+      console.log(`\n⚠️ ===== FALLBACK TRANSLATION =====`);
+      console.log(`📝 BEFORE: "${text}"`);
+      console.log(`🌍 TARGET LANGUAGE: ${targetLanguage}`);
+      console.log(`❌ API ERROR: ${error.message}`);
+      
       // Fallback translation for demo purposes
       const fallbackTranslations = {
         'Richard. William. Orange. More.': 'Ricardo. Guillermo. Naranja. Más.',
@@ -223,6 +260,13 @@ export class ElevenLabsSTTService {
       };
       
       const fallbackTranslation = fallbackTranslations[text] || `[Translated: ${text}]`;
+      
+      console.log(`\n✅ ===== FALLBACK RESULT =====`);
+      console.log(`📝 BEFORE: "${text}"`);
+      console.log(`📝 AFTER:  "${fallbackTranslation}"`);
+      console.log(`🌍 LANGUAGE: en → ${targetLanguage}`);
+      console.log(`🎯 CONFIDENCE: 0.8 (fallback)`);
+      console.log(`================================\n`);
       
       // Generate audio using ElevenLabs TTS for fallback translations too
       let audioData = null;
